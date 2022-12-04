@@ -1,5 +1,8 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:process_run/shell_run.dart';
+import 'package:logger/logger.dart';
 
 void main() {
   runApp(const MyApp());
@@ -31,8 +34,10 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  static const double defTblHeight = 40;
+  String serviceCtlPath = "/opt/homebrew/bin/brew";
 
+  bool blProsesRefresh = false;
   bool blMysql = false;
   bool blNginx = false;
   bool blPhp = false;
@@ -44,126 +49,127 @@ class _MyHomePageState extends State<MyHomePage> {
     '8.1',
   ];
 
-  Future<void> _showPilihanlDialog(BuildContext context, String judul,
-      List<DropdownMenuItem<String>> dropdownItems) {
-    String tmpisiChange = '';
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false, // user must tap button!
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(judul),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                DropdownButton(
-                    value: phpVersion,
-                    dropdownColor: Colors.green,
-                    icon: const Icon(Icons.keyboard_arrow_down),
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        Navigator.pop(context);
-                        phpVersion = newValue!;
-                      });
-                    },
-                    items: dropdownItems),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  String osPlatformInfo = Platform.operatingSystem; //in your code
+  String osPlatformDetailInfo = Platform.operatingSystemVersion;
+
+  Future<void> setExePath() async {
+    if (kIsWeb) {
+      serviceCtlPath = '';
+      print('is a WEB');
+    } else {
+      if (Platform.isMacOS) {
+        //if M1
+        serviceCtlPath = "/opt/homebrew/bin/brew";
+        //serviceCtlPath = "/usr/local/bin/brew"; //for intel
+      }
+      if (Platform.isWindows) {
+        serviceCtlPath = "/windows/cmd";
+      }
+      if (Platform.isLinux) {
+        serviceCtlPath = "/bin/bash";
+      }
+    }
   }
 
+  var logger = Logger(
+    printer: PrettyPrinter(),
+  );
+
   Future<void> _getServiceStatusnya() async {
-    bool hasilakhir;
-    var shell = Shell();
-    var result;
+    if (blProsesRefresh == false) {
+      blProsesRefresh = true;
+      setState(() {
+        blProsesRefresh;
+      });
+      var shell = Shell();
+      late List<ProcessResult> resultB1;
 
-    var resultB1 = await shell.run('''
-        brew services list
+      try {
+        resultB1 = await shell.run('''
+        $serviceCtlPath services list
         ''');
-
-    final whitespaceRE = RegExp(r"(?! )\s+| \s+");
-
-    if (resultB1.isNotEmpty) {
-      //if not error
-      // print('err [$i] -> ${resultB1.errLines}');
-      // print('errt [$i] -> ${resultB1.errText}');
-      for (var i = 0; i < resultB1.outLines.length; i++) {
-        //print('outt [$i] -> ${resultB1.outLines.elementAt(i)}');
-        String strPar1 = resultB1.outLines.elementAt(i);
-        strPar1 = strPar1.replaceAll(whitespaceRE, " ");
-
-        final strSplitted = strPar1.split(' ');
-        if (strSplitted.length > 1) {
-          if (strSplitted.elementAt(0) == 'mysql') {
-            if (strSplitted.elementAt(1) == 'started') {
-              blMysql = true;
-            } else {
-              blMysql = false;
-            }
-          } else if (strSplitted.elementAt(0) == 'nginx') {
-            if (strSplitted.elementAt(1) == 'started') {
-              blNginx = true;
-            } else {
-              blNginx = false;
-            }
-          } else if (strSplitted.elementAt(0) == 'php') {
-            if (strSplitted.elementAt(1) == 'started') {
-              blPhp = true;
-            } else {
-              blPhp = false;
-            }
-          } else if (strSplitted.elementAt(0) == 'apache') {
-            if (strSplitted.elementAt(1) == 'started') {
-              blApache = true;
-            } else {
-              blApache = false;
-            }
-          }
-        }
-
-        print(strSplitted);
+      } catch (e) {
+        logger.e(e);
+        print(e.toString());
       }
 
+      final whitespaceRE = RegExp(r"(?! )\s+| \s+");
+
+      if (resultB1.isNotEmpty) {
+        //if not error
+        if (resultB1.errText.isNotEmpty) {
+          print(resultB1.errText.toString());
+          exit;
+        }
+
+        // print('err [$i] -> ${resultB1.errLines}');
+        // print('errt [$i] -> ${resultB1.errText}');
+        for (var i = 0; i < resultB1.outLines.length; i++) {
+          //print('outt [$i] -> ${resultB1.outLines.elementAt(i)}');
+          String strPar1 = resultB1.outLines.elementAt(i);
+          strPar1 = strPar1.replaceAll(whitespaceRE, " ");
+
+          final strSplitted = strPar1.split(' ');
+          if (strSplitted.length > 1) {
+            if (strSplitted.elementAt(0) == 'mysql') {
+              if (strSplitted.elementAt(1) == 'started') {
+                blMysql = true;
+              } else {
+                blMysql = false;
+              }
+            } else if (strSplitted.elementAt(0) == 'nginx') {
+              if (strSplitted.elementAt(1) == 'started') {
+                blNginx = true;
+              } else {
+                blNginx = false;
+              }
+            } else if (strSplitted.elementAt(0) == 'php') {
+              if (strSplitted.elementAt(1) == 'started') {
+                blPhp = true;
+              } else {
+                blPhp = false;
+              }
+            } else if (strSplitted.elementAt(0) == 'apache') {
+              if (strSplitted.elementAt(1) == 'started') {
+                blApache = true;
+              } else {
+                blApache = false;
+              }
+            }
+          }
+
+          //(strSplitted);
+        }
+
+        setState(() {
+          blApache;
+          blMysql;
+          blNginx;
+          blPhp;
+        });
+      }
+
+      blProsesRefresh = false;
       setState(() {
-        _counter++;
+        blProsesRefresh;
       });
     }
   }
 
   Future<void> _startStopService(String ident, bool bstatus) async {
-    bool hasilakhir;
     var shell = Shell();
-    var result;
+    List<ProcessResult> result;
     String iDentVer = '';
 
     if (ident.toLowerCase() == 'nginx') {
       if (bstatus == true) {
         result = await shell.run('''
-        brew services restart nginx
+        $serviceCtlPath services restart nginx
         ''');
-        print(result.toString());
-        // var process = await Process.start('cat', []);
-        // process.stdin.writeln('Hello, world!');
-        // process.stdin.writeln('Hello, galaxy!');
-        // process.stdin.writeln('Hello, universe!');
       } else {
         result = await shell.run('''
-        brew services stop nginx
+        $serviceCtlPath services stop nginx
         ''');
-        print(result.toString());
       }
     } else if (ident.toLowerCase() == 'php') {
       if (phpVersion.toLowerCase() == 'default') {
@@ -173,57 +179,185 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       if (bstatus == true) {
         result = await shell.run('''
-        brew services restart php$iDentVer
+        $serviceCtlPath services restart php$iDentVer
         ''');
-        print(result.toString());
-        // var process = await Process.start('cat', []);
-        // process.stdin.writeln('Hello, world!');
-        // process.stdin.writeln('Hello, galaxy!');
-        // process.stdin.writeln('Hello, universe!');
       } else {
         result = await shell.run('''
-        brew services stop php$iDentVer
+        $serviceCtlPath services stop php$iDentVer
         ''');
-        print(result.toString());
       }
     } else if (ident.toLowerCase() == 'mysql') {
       if (bstatus == true) {
         result = await shell.run('''
-        brew services restart mysql
+        $serviceCtlPath services restart mysql
         ''');
-        print(result.toString());
-        // var process = await Process.start('cat', []);
-        // process.stdin.writeln('Hello, world!');
-        // process.stdin.writeln('Hello, galaxy!');
-        // process.stdin.writeln('Hello, universe!');
       } else {
         result = await shell.run('''
-        brew services stop mysql
+        $serviceCtlPath services stop mysql
         ''');
-        print(result.toString());
       }
     } else if (ident.toLowerCase() == 'apache') {
       if (bstatus == true) {
         result = await shell.run('''
-        brew services restart apache2
+        $serviceCtlPath services restart apache2
         ''');
-        print(result.toString());
-        // var process = await Process.start('cat', []);
-        // process.stdin.writeln('Hello, world!');
-        // process.stdin.writeln('Hello, galaxy!');
-        // process.stdin.writeln('Hello, universe!');
       } else {
         result = await shell.run('''
-        brew services stop apache2
+        $serviceCtlPath services stop apache2
         ''');
-        print(result.toString());
       }
     }
 
     _getServiceStatusnya();
-    // setState(() {
-    //   _counter++;
-    // });
+  }
+
+  Widget listAppMng() {
+    return Table(
+      columnWidths: const <int, TableColumnWidth>{
+        0: FlexColumnWidth(),
+        1: IntrinsicColumnWidth(),
+        2: FlexColumnWidth(),
+        3: FlexColumnWidth(),
+        4: FlexColumnWidth(),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: <TableRow>[
+        TableRow(
+          children: <Widget>[
+            const SizedBox(
+              height: defTblHeight,
+            ),
+            const SizedBox(
+              child: Text(
+                'Nginx',
+              ),
+            ),
+            TableCell(
+              verticalAlignment: TableCellVerticalAlignment.middle,
+              child: Container(),
+            ),
+            SizedBox(
+              child: Switch(
+                value: blNginx,
+                onChanged: (value) {
+                  setState(() {
+                    blNginx = value;
+                    _startStopService('nginx', blNginx);
+                  });
+                },
+                activeTrackColor: Colors.lightGreenAccent,
+                activeColor: Colors.green,
+              ),
+            ),
+            const SizedBox(),
+          ],
+        ),
+        TableRow(
+          children: <Widget>[
+            const SizedBox(
+              height: defTblHeight,
+            ),
+            const SizedBox(
+              child: Text(
+                'Apache',
+              ),
+            ),
+            TableCell(
+              verticalAlignment: TableCellVerticalAlignment.middle,
+              child: Container(),
+            ),
+            SizedBox(
+              child: Switch(
+                value: blApache,
+                onChanged: (value) {
+                  setState(() {
+                    blApache = value;
+                    _startStopService('apache', blApache);
+                  });
+                },
+                activeTrackColor: Colors.lightGreenAccent,
+                activeColor: Colors.green,
+              ),
+            ),
+            const SizedBox(),
+          ],
+        ),
+        TableRow(
+          children: <Widget>[
+            const SizedBox(
+              height: defTblHeight,
+            ),
+            const SizedBox(
+              child: Text(
+                'MySQL',
+              ),
+            ),
+            TableCell(
+              verticalAlignment: TableCellVerticalAlignment.middle,
+              child: Container(),
+            ),
+            SizedBox(
+              child: Switch(
+                value: blMysql,
+                onChanged: (value) {
+                  setState(() {
+                    blMysql = value;
+                    _startStopService('mysql', blMysql);
+                  });
+                },
+                activeTrackColor: Colors.lightGreenAccent,
+                activeColor: Colors.green,
+              ),
+            ),
+            const SizedBox(),
+          ],
+        ),
+        TableRow(
+          children: <Widget>[
+            const SizedBox(
+              height: defTblHeight,
+            ),
+            const SizedBox(
+              child: Text(
+                'PHP',
+              ),
+            ),
+            TableCell(
+              verticalAlignment: TableCellVerticalAlignment.middle,
+              child: DropdownButton(
+                value: phpVersion,
+                icon: const Icon(Icons.keyboard_arrow_down),
+                items: itemsStrPhpVer.map((String items) {
+                  return DropdownMenuItem(
+                    value: items,
+                    child: Text(items),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    phpVersion = newValue!;
+                  });
+                },
+              ),
+            ),
+            SizedBox(
+              child: Switch(
+                value: blPhp,
+                onChanged: (value) {
+                  setState(() {
+                    blPhp = value;
+                    _startStopService('php', blPhp);
+                  });
+                },
+                activeTrackColor: Colors.lightGreenAccent,
+                activeColor: Colors.green,
+              ),
+            ),
+            const SizedBox(),
+          ],
+        ),
+      ],
+    );
   }
 
   @override
@@ -238,131 +372,22 @@ class _MyHomePageState extends State<MyHomePage> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           crossAxisAlignment: (CrossAxisAlignment.center),
           children: <Widget>[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              //mainAxisSize: (MainAxisSize.max),
+            Column(
               children: [
-                const Divider(
-                  indent: 5,
+                Text(
+                  'OS : $osPlatformInfo',
                 ),
-                const Text(
-                  'Nginx : ',
+                Text(
+                  'Detail : $osPlatformDetailInfo',
                 ),
-                Switch(
-                  value: blNginx,
-                  onChanged: (value) {
-                    setState(() {
-                      blNginx = value;
+                const SizedBox(
+                  height: 40,
+                ),
+              ],
+            ),
 
-                      print(blNginx);
-                      _startStopService('nginx', blNginx);
-                    });
-                  },
-                  activeTrackColor: Colors.lightGreenAccent,
-                  activeColor: Colors.green,
-                ),
-                const Divider(
-                  indent: 5,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              //mainAxisSize: MainAxisSize.max,
-              children: [
-                const Divider(
-                  indent: 5,
-                ),
-                const Text(
-                  'Apache : ',
-                ),
-                Switch(
-                  value: blApache,
-                  onChanged: (value) {
-                    setState(() {
-                      blApache = value;
-
-                      print(blApache);
-                      _startStopService('apache', blApache);
-                    });
-                  },
-                  activeTrackColor: Colors.lightGreenAccent,
-                  activeColor: Colors.green,
-                ),
-                const Divider(
-                  indent: 5,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              //crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Divider(
-                  indent: 5,
-                ),
-                const Text(
-                  'MySQL : ',
-                ),
-                Switch(
-                  value: blMysql,
-                  onChanged: (value) {
-                    setState(() {
-                      blMysql = value;
-
-                      print(blMysql);
-                      _startStopService('mysql', blMysql);
-                    });
-                  },
-                  activeTrackColor: Colors.lightGreenAccent,
-                  activeColor: Colors.green,
-                ),
-                const Divider(
-                  indent: 5,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              //mainAxisSize: MainAxisSize.max,
-              children: [
-                const Divider(
-                  indent: 5,
-                ),
-                const Text(
-                  'PHP : ',
-                ),
-                DropdownButton(
-                  value: phpVersion,
-                  icon: const Icon(Icons.keyboard_arrow_down),
-                  items: itemsStrPhpVer.map((String items) {
-                    return DropdownMenuItem(
-                      value: items,
-                      child: Text(items),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      phpVersion = newValue!;
-                    });
-                  },
-                ),
-                Switch(
-                  value: blPhp,
-                  onChanged: (value) {
-                    setState(() {
-                      blPhp = value;
-                      _startStopService('php', blPhp);
-                    });
-                  },
-                  activeTrackColor: Colors.lightGreenAccent,
-                  activeColor: Colors.green,
-                ),
-                const Divider(
-                  indent: 5,
-                ),
-              ],
-            ),
+            //
+            listAppMng(),
           ],
         ),
       ),
@@ -381,7 +406,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     //shadowColor = !shadowColor;
                   });
                 },
-                icon: Icon(
+                icon: const Icon(
                   Icons.info_outline,
                 ),
                 label: const Text('about'),
@@ -392,7 +417,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   //
                 },
                 icon: const Icon(Icons.settings),
-                label: Text('Install'),
+                label: const Text('Install'),
               ),
             ],
           ),
@@ -400,8 +425,12 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _getServiceStatusnya,
-        tooltip: 'Refresh Service Status',
-        child: const Icon(Icons.refresh),
+        tooltip: blProsesRefresh
+            ? 'Processing, Please Wait...'
+            : 'Refresh Service Status',
+        child: blProsesRefresh
+            ? const Icon(Icons.update)
+            : const Icon(Icons.refresh),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
